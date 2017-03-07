@@ -16,8 +16,8 @@ account.st   <- "accnt"                # Account name
 initEq       <- 10000                 # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-breakout  <- 20
-stop  <- 10
+breakout  <- 55
+stop  <- 20
 atrMult <- 2
 riskpct <- 0.02
 
@@ -31,7 +31,7 @@ atrStopThresh <- function(HLC, n=20, atr_mult=2){
 
 # A Function to size the order based on the ATR, use A built in order size function
 # instead to not utilize this functionality
-osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, acct = account.st, portfolio = portfolio, ...){
+osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, acct = account.st, symbol = symbol, portfolio = portfolio, ...){
   # First set a multiplier to get order in the correct sign for short or long
   if(orderqty<0){
     sign <- -1
@@ -44,6 +44,12 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
   updateAcct(name = acct)
   updateEndEq(Account = acct)
   account_eq <- getEndEq(Account = acct,Date = timestamp)
+  
+  # 0 out order if already in the market
+  currentPos <- getPosQty(Portfolio = portfolio, Symbol = symbol, Date = timestamp)
+  if(currentPos != 0){
+    sign <- 0
+  }
   
   # determine volatility adjusted position sizing 
   orderqty <- (account_eq * riskpct)/((data[timestamp]$atr.atrStopThresh)*(Cl(data[timestamp])))
@@ -121,7 +127,7 @@ add.signal(strat, name = "sigCrossover", arguments = list(columns=c("Close","hig
 add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='long_entry', sigval=TRUE, orderside='long', ordertype='market', 
-                         orderqty=+100, osFUN='osMaxPos', replace=FALSE
+                         orderqty=+100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter',
          label='EnterLONG'
@@ -130,7 +136,7 @@ add.rule(strategy=strat,
 add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='short_entry', sigval=TRUE, orderside='short', ordertype='market', 
-                        orderqty=-100, osFUN='osMaxPos', replace=FALSE
+                        orderqty=-100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter',
          label='EnterSHORT'
@@ -186,7 +192,7 @@ add.rule(strat, 'rulePctEquity',
 
 enable.rule(strat,type = "chain",label = "StopLONG")
 enable.rule(strat,type = "chain",label = "StopSHORT")
-out <- applyStrategy.rebalancing(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
+out <- applyStrategy(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
 updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio
 updateAcct(name = account.st)
 updateEndEq(account.st)
