@@ -6,6 +6,7 @@
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
+library(doMC)
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
@@ -16,9 +17,9 @@ account.st   <- "accnt"                # Account name
 initEq       <- 10000                 # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-breakout  <- 200
-stop  <- 180
-atrMult <- 3
+breakout  <- seq(20, 400, by = 20)
+stop  <- seq(20, 400, by = 20)
+atrMult <- seq(1, 5, by = 1)
 riskpct <- 0.02
 
 # Strategy Functions
@@ -78,6 +79,7 @@ getSymbols("^GSPC", from = '1995-01-01')
 # if run previously, run this code from here down to the strategy definition before re-running
 rm.strat(portfolio.st, silent = FALSE)
 rm.strat(account.st, silent = FALSE)
+delete.paramset(strategy = strat, "Turtle_OPT")
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
 initPortf(portfolio.st, symbols = symbol, initDate = "1995-01-01")
@@ -91,7 +93,7 @@ addPosLimit(portfolio = portfolio.st, symbol, timestamp="1995-01-01", maxpos=100
 # Define Strategy
 strategy(strat, store = TRUE)
 
-# Add the indicators - breakout donchian channel, stop donchian channel and an ATR threshold multiplier
+# Add the indicators - - breakout donchian channel, stop donchian channel and an ATR threshold multiplier
 add.indicator(strategy = strat, name = "HLDonch",
               arguments=list(data=quote(mktdata), n = breakout, lag=TRUE), 
               label = "DonchBreak"
@@ -180,40 +182,63 @@ add.rule(strategy=strat,
          label='StopSHORT',enabled = FALSE
 )
 
-# Percentage Equity rebalancing rule
-add.rule(strat, 'rulePctEquity',
-         arguments=list(rebalance_on='months',
-                        trade.percent=1,
-                        refprice=quote(last(getPrice(mktdata)[paste('::',curIndex,sep='')])[,1]),
-                        digits=0
-         ),
-         type='rebalance',
-         label='rebalance')
+# Add distributions and constraints
+add.distribution(strategy = strat,
+                 paramset.label = "Turtle_OPT",
+                 component.type = "indicator",
+                 component.label = "DonchBreak",
+                 variable = list( n = breakout ),
+                 label = "DonchBreak"
+)
 
-enable.rule(strat,type = "chain",label = "StopLONG")
+add.distribution(strategy = strat,
+                 paramset.label = "Turtle_OPT",
+                 component.type = "indicator",
+                 component.label = "DonchStop",
+                 variable = list( n = stop ),
+                 label = "DonchStop"
+)
+
+add.distribution(strategy = strat,
+                 paramset.label = "Turtle_OPT",
+                 component.type = "indicator",
+                 component.label = "atrStopThresh",
+                 variable = list( atr_mult=atrMult ),
+                 label = "atr"
+)
+
+add.distribution.constraint(strategy = strat,
+                            paramset.label = "Turtle_OPT",
+                            distribution.label.1 = "DonchBreak",
+                            distribution.label.2 = "DonchStop",
+                            operator = ">",
+                            label = "breakgtstop")
+
+# Enable Rules
 enable.rule(strat,type = "chain",label = "StopSHORT")
-out <- applyStrategy(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
-updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio
-updateAcct(name = account.st)
-updateEndEq(account.st)
+enable.rule(strat,type = "chain",label = "StopLONG")
 
-#chart the position
-donchian_break <- DonchianChannel(HL=(cbind(Hi(GSPC),Lo(GSPC))),n=breakout,include.lag = TRUE)
-donchian_stop <- DonchianChannel(HL=(cbind(Hi(GSPC),Lo(GSPC))),n=stop,include.lag = TRUE)
-chart.Posn(Portfolio = portfolio.st, Symbol = symbol, 
-           TA = list("add_TA(donchian_break[,1],on=1,col=1)","add_TA(donchian_break[,3],on=1,col=1)",
-                     "add_TA(donchian_stop[,1],on=1,col=2)","add_TA(donchian_stop[,3],on=1,col=2)"))                   # Chart the position
-stats <- tradeStats(portfolio.st)
-OB <- get.orderbook(portfolio.st)
-orders <- OB$portf$GSPC
+# Register the cores for parralel procssing
+registerDoMC(cores=detectCores())
 
-#plot the returns vs buy and hold
-eq1 <- getAccount(account.st)$summary$End.Eq
-rt1 <- Return.calculate(eq1,"log")
-rt2 <- periodReturn(GSPC, period = "daily")
-returns <- cbind(rt1,rt2)
-colnames(returns) <- c("Donchian","SP500")
-chart.CumReturns(returns,colorset=c(2,4),legend.loc="topleft",
-                 main="Donchian to Benchmark Comparison",ylab="cum return",xlab="",
-                 minor.ticks=FALSE)
+# Now apply the parameter sets for optimization
+out <- apply.paramset(strat, paramset.label = "Turtle_OPT",
+                      portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE) # Attempt the strategy
+
+stats <- out$tradeStats
+
+# Or use a heatmap to look at one parameter at a time
+for (a in atrMult){
+  dfName <- paste(a,"stats", sep = "")
+  statSubsetDf <- subset(stats, atr == a)
+  assign(dfName, statSubsetDf)
+  z <- tapply(X=statSubsetDf$Net.Trading.PL, 
+              INDEX = list(statSubsetDf$DonchBreak,statSubsetDf$DonchStop), 
+              FUN = median)
+  x <- as.numeric(rownames(z))
+  y <- as.numeric(colnames(z))
+  filled.contour(x=x,y=y,z=z,color=heat.colors,xlab="breakout",ylab="stop")
+  title(a)
+}
+
 Sys.setenv(TZ=ttz)                                             # Return to original time zone
