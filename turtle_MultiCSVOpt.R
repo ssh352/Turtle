@@ -24,7 +24,7 @@ xtsDates     <- "2006/"        # Variable for the point in time you want your pr
 breakout  <- seq(20, 400, by = 20)
 stop  <- seq(20, 400, by = 20)
 atrMult <- seq(1, 5, by = 1)
-riskpct <- 0.02
+riskpct <- 0.01
 
 # Strategy Functions
 
@@ -71,7 +71,8 @@ HLDonch <- function(data, n=10, lag = TRUE){
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
 currency('USD')                                                        # set USD as a base currency
-symbol <- c("LSU","RR","CO","NG","OJ","LB","HG","LC","CT","CC","KC")   # Universe selection
+symbol <- c("LSU","RR","CO","NG","OJ","LB","HG",
+            "LC","CT","CC","KC","WTI","XAU")   # Universe selection
 
 for (sym in symbol){
   future(sym, currency = "USD", multiplier = 1)
@@ -238,11 +239,16 @@ out <- apply.paramset(strat, paramset.label = "Turtle_OPT",
                       portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
 stats <- out$tradeStats
 
-wd <- getwd()
-csv_file <- paste(wd,"Opt_comm_20170310",".csv", sep="")
 out <- write.csv(stats,             # write to file
-                 file = csv_file,
-                 quote = FALSE, row.names = TRUE)
+                file = paste(getwd(),"/DonchianOpt",as.character(Sys.Date()),".csv", sep=""),
+                quote = FALSE, row.names = TRUE)
+
+# If you've done this on a  previous date
+date <- "2017-03-10"
+stats <- read.csv(paste(getwd(),"Opt_comm_20170310",".csv", sep=""))
+stats <- stats[,-1]
+
+portfolio_avg <- aggregate(stats[,c(1,2,3,6:33)],list(stats$Portfolio), mean)
 
 # A loop to investigate the parameters via a 3D graph
 for (sym in symbol){
@@ -261,12 +267,20 @@ for (sym in symbol){
   statSubsetDf <- subset(stats, Symbol == sym)
   assign(dfName, statSubsetDf)
   z <- tapply(X=statSubsetDf$Net.Trading.PL, 
-              INDEX = list(statSubsetDf$ma_fast,statSubsetDf$ma_slow), 
+              INDEX = list(statSubsetDf$DonchStop,statSubsetDf$DonchBreak), 
               FUN = median)
   x <- as.numeric(rownames(z))
   y <- as.numeric(colnames(z))
   filled.contour(x=x,y=y,z=z,color=heat.colors,xlab="ma_fast",ylab="ma_slow")
   title(sym)
+}
+
+for (sym in symbol){
+  dfName <- paste(sym,"stats", sep = "")
+  statSubsetDf <- subset(stats, Symbol == sym)
+  hist(statSubsetDf$Net.Trading.PL, breaks = 100, main = paste(dfName,"mean =",mean(statSubsetDf$Net.Trading.PL),sep = " "))
+  assign(dfName, statSubsetDf)
+  
 }
 
 Sys.setenv(TZ=ttz)                                             # Return to original time zone

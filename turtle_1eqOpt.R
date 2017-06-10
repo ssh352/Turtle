@@ -135,14 +135,14 @@ add.rule(strategy=strat,
          label='EnterLONG'
 )
 
-add.rule(strategy=strat,
-         name='ruleSignal',
-         arguments=list(sigcol='short_entry', sigval=TRUE, orderside='short', ordertype='market', 
-                        orderqty=-100, osFUN='osATRsize', replace=FALSE
-         ),
-         type='enter',
-         label='EnterSHORT'
-)
+  add.rule(strategy=strat,
+           name='ruleSignal',
+           arguments=list(sigcol='short_entry', sigval=TRUE, orderside='short', ordertype='market', 
+                          orderqty=-100, osFUN='osATRsize', replace=FALSE
+           ),
+           type='enter',
+           label='EnterSHORT'
+  )
 
 # b) Exit rules - Close on cross the other way
 add.rule(strategy = strat, name='ruleSignal',
