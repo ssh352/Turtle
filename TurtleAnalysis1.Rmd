@@ -1,0 +1,93 @@
+---
+title: "DMA_Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## DMA Analysis
+
+This is a document that outlines the method that I use to analyze the output from a quantstrat backtest that uses the paramset function to
+test multiple parameters for multiple symbols. It will load the data that was produced from .csv in the first instance as a dataframe called
+stats. In this case it is the data for a donchian channel trend following strategy. The variables are breakout donchian channel, stop donchian channel and atr stoploss, which varies both stoploss distance from entry and trade size.
+
+```{r}
+date <- "2017-04-07"
+stats <- read.csv(paste("/media/sjaoraid/strat/Turtle/opt/DonchianOpt",date,".csv", sep=""))
+stats <- stats[,-1]
+symbols <- as.character(unique(stats$Symbol))
+library(ggplot2)
+```
+
+The first task is to identify the distribution of returns of the strategy over the paramter range tested.
+
+```{r}
+hist(stats$Net.Trading.PL, breaks =200,xlim = c(-100000,100000), main = paste("Average = ", mean(stats$Net.Trading.PL)))
+```
+
+This first level of analysis would seem to suggest that the strategy is not profitable overall, that is, is you traded every parameter combination that was tested with equal weighting you would come out marginally behind (6% loss over 10 years). The task now must be to eliminate parameter combinations in a non random fashion to produce data that will a) increase our confidence in the data we have obtained and b) increase average returns. Eventually, we may optimize each instrument, but only if we are clear about why we are doing this. So first let us have a look at some averages of the portfolios.
+
+```{r}
+portfolio_avg <- aggregate(stats[,c(1,2,3,6:33)],list(stats$Portfolio), mean)
+```
+
+Q1) What is the minimum number of trades that are aceptable for a back test?
+Some, admitedly cursory, reading of the internet has show that there is no clear answer given to this question that has gained 
+popular acceptance. Surely it cannot be number, say 30, as it will likely depend on the holding period of your trades and the time frame you are trading on. But this question must be tackled in some way, otherwise your data is going to be corrupted with data from sample with low amount of trades and give you spurious reults. Perhaps the way to go about answering this question in the first instance is to see how number of trades varies with the variables of fast moving average, slow moving average and ATR period and then compare this with net profit, profit to max drawdown and Sharpe ratio. These trade incorporate a 5 basis point per trade round trip cost. 
+
+```{r}
+qplot(data = portfolio_avg,x=atr,y=Num.Trades,facets = .~DonchBreak,color=DonchStop,main="Variation of Number of Trades with Donchian Channel Length & ATR Stoploss")
+qplot(data = portfolio_avg,x=atr,y=Net.Trading.PL,facets = .~DonchBreak,color=DonchStop,main="Variation of Net Trading Profit/Loss with Donchian Channel Length & ATR Stoploss", geom=c("point"))
+qplot(data = portfolio_avg,x=atr,y=Profit.To.Max.Draw,facets = .~DonchBreak,color=DonchStop, main="Variation of Profit:Maximum Drawdown with Donchian Channel Length & ATR Stoploss",  geom=c("point"))
+qplot(data = portfolio_avg,x=atr,y=Ann.Sharpe,facets = .~DonchBreak,color=DonchStop, main="Variation of the Annual Sharpe Ratio with Donchian Channel Length & ATR Stoploss",  geom=c("point"))
+
+```
+Performance is really not good here. One observation is that a close stop loss tends to ruin (even more) the performance of your strategy. We can get rid of all trades with ATR set to 1.
+
+```{r}
+hist(subset(stats,atr>1)$Net.Trading.PL,breaks =50,xlim = c(-100000,100000), main = paste("Average = ", mean(subset(stats,atr>1)$Net.Trading.PL)))
+```
+Sucks a little bit less.
+
+```{r}
+qplot(data = subset(portfolio_avg,ma_slow<110),x=atr,y=Num.Trades,facets = .~ma_slow,color=ma_fast)
+qplot(data = subset(portfolio_avg,ma_slow<110),x=atr,y=Net.Trading.PL,facets = .~ma_slow,color=ma_fast)
+qplot(data = subset(portfolio_avg,ma_slow<110),x=atr,y=Profit.To.Max.Draw,facets = .~ma_slow,color=ma_fast)
+qplot(data = subset(portfolio_avg,ma_slow<110),x=atr,y=Ann.Sharpe,facets = .~ma_slow,color=ma_fast,ylim = c(-10,6))
+```
+
+Perhaps an examination of each of the symbols that are captured by these averages will help shed light on the nature of the relationship between moving average period and atr on the above parameters.
+
+```{r, message=FALSE, warning=FALSE}
+for(sym in symbols){
+  print(qplot(data = stats[stats$Symbol==sym,],x=atr,y=Num.Trades,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of No. of Trades with Donch Channel Length & ATR for ",sym,sep="")))
+  
+}
+```
+
+```{r, message=FALSE, warning=FALSE}
+for(sym in symbols){
+  
+  print(qplot(data = stats[stats$Symbol==sym,],x=atr,y=Net.Trading.PL,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of Net PL with Donch & ATR for ",sym,sep="")))
+  
+}
+```
+
+```{r, message=FALSE, warning=FALSE}
+for(sym in symbols){
+  
+  print(qplot(data = stats[stats$Symbol==sym,],x=atr,y=Profit.To.Max.Draw,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of Profit:Maximum Drawdown with Donch & ATR for ",sym,sep="")))
+  
+}
+```
+
+```{r, message=FALSE, warning=FALSE}
+for(sym in symbols){
+  
+  print(qplot(data = stats[stats$Symbol==sym,],x=atr,y=Ann.Sharpe,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of Sharpe Ratio with Donch & ATR for ",sym,sep=""),ylim = c(-10,10)))
+}
+```
+
+
