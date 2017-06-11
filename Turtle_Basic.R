@@ -8,7 +8,7 @@ require(quantstrat)
 # Set the system time to UTC
 Sys.setenv(TZ="UTC")
 
-# Get DMA include ile with parameters and Functions
+# Get Turtle include ile with parameters and Functions
 source(paste(getwd(),"/TurtleInclude.R",sep=""))
 
 # Strategy specific variables
@@ -150,6 +150,9 @@ enable.rule(strat,type = "chain",label = "StopSHORT")
 
 # Apply the strategy assigning the output to a variable out
 out <- applyStrategy(strategy=strat , portfolios=portfolio.st)
+
+# If you wan't to rebalance use this
+# out <- applyStrategy.rebalancing(strategy=strat , portfolios=portfolio.st)
 
 updatePortf(Portfolio = portfolio.st) # Update the portfolio, acct and endeq
 updateAcct(name = account.st)
