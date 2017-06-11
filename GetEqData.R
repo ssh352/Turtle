@@ -16,4 +16,8 @@ symbol <- "GSPC"            # Universe selection At this stage is only one symbo
 stock(symbol, currency = "USD", multiplier = 1)
 getSymbols("^GSPC", from = '1995-01-01')
 
-risk <- setRisk(symbol)                                 # set the risk for rebalancing using the function
+for(sym in symbol){
+  assign(sym,na.fill(get(sym),fill='extend'))
+}
+
+#risk <- setRisk(symbol)                                 # set the risk for rebalancing using the function

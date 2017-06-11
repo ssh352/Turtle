@@ -3,44 +3,32 @@
 Sys.setenv(TZ='UTC')
 
 # Quantstrat general variables
-strat        <- "DMA"           # Give the stratgey a name variable
+strat        <- "Turtle"        # Give the stratgey a name variable
 portfolio.st <- "portf"         # Portfolio name
 account.st   <- "accnt"         # Account name
-initEq       <- 1000000          # this parameter is required to get pct equity rebalancing to work
+initEq       <- 1000000         # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast  <- 40   # fast moving average period
-MAslow  <- 80   # slow moving average period
-atrMult <- 10   # atr multiple for stop loss and order sizing
-riskpct <- 0.02 # percentage of equity to risk
-risk <- 1
+breakout  <- 200  # Breakout Donchian Channel Length
+stop      <- 180  # Stop Donchian Channel Length
+atrMult   <- 3    # Multiple of ATR to use for stoploss and order sizing calculation
+riskpct   <- 0.02 # Amount of trade balance to risk per trade
 
-# Paramset Variables
-MAfastPset  <- seq(20, 100, by = 10)        # fast moving average period for paramset
-MAslowPset  <- seq(40, 100, by = 10)        # slow moving average period for paramset
-atrMultPset <- seq(2, 10, by = 1)           # atr multiple to use for paramset
-
-# Strategy Functions
-# A function to set the risk for rebalancing based on the number of symbols. Overly long use length instead
-setRisk <- function(symlist){
-  n = 0
-  for (sym in symlist){
-    n = n+1
-  }
-  risk <- round(1/n, digits = 2)
-  return(risk)
-}
+# Strategy specific variables
+breakoutPset  <- seq(20, 400, by = 20)
+stopPset      <- seq(20, 400, by = 20)
+atrMultPset   <- seq(1, 5, by = 1)
 
 # Custom indicator to generate the threshold multiplier to set an ATR based stop.
-atrStopThresh <- function(HLC, n=14, atr_mult=2){
+atrStopThresh <- function(HLC, n=20, atr_mult=2){
   ATR <- ATR(HLC = HLC, n)
   pctATR <- (atr_mult*ATR$atr)/Cl(HLC)
   pctATR
 }
 
-# Function to size order according to account balance, percentage risk desired and volatility (ATR)
-# use a built in order size function instead to not utilize this functionality
-osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, acct = account.st, portfolio = portfolio, ...){
+# A Function to size the order based on the ATR, use A built in order size function
+# instead to not utilize this functionality
+osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, acct = account.st, symbol = symbol, portfolio = portfolio, ...){
   # First set a multiplier to get order in the correct sign for short or long
   if(orderqty<0){
     sign <- -1
@@ -48,11 +36,17 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
     sign <- 1
   }
   
-  # get account equity
+  # get updated account equity
   updatePortf(Portfolio = portfolio)
   updateAcct(name = acct)
   updateEndEq(Account = acct)
   account_eq <- getEndEq(Account = acct,Date = timestamp)
+  
+  # 0 out order if already in the market
+  currentPos <- getPosQty(Portfolio = portfolio, Symbol = symbol, Date = timestamp)
+  if(currentPos != 0){
+    sign <- 0
+  }
   
   # determine volatility adjusted position sizing 
   orderqty <- (account_eq * riskpct)/((data[timestamp]$atr.atrStopThresh)*(Cl(data[timestamp])))
@@ -60,6 +54,14 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
   # round down, get as a number of correct sign and return
   orderqty <- (as.numeric(floor(orderqty)))*sign
   orderqty
+}
+
+# Function to use High and Low in Donchian Channel Calculation
+HLDonch <- function(data, n=10, lag = TRUE){
+  dataHL <- cbind(data[,2],data[,3])
+  assign("test",dataHL,envir = .GlobalEnv)
+  hiLoDonch <- DonchianChannel(dataHL,n=n,include.lag = lag)
+  hiLoDonch
 }
 
 # Transaction Fee Function - Returns a numeric Fee which is a percetage multiple of the tranaction total value 
