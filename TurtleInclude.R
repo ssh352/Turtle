@@ -9,8 +9,8 @@ account.st   <- "accnt"         # Account name
 initEq       <- 1000000         # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-breakout  <- 200  # Breakout Donchian Channel Length
-stop      <- 180  # Stop Donchian Channel Length
+breakout  <- 20  # Breakout Donchian Channel Length
+stop      <- 10  # Stop Donchian Channel Length
 atrMult   <- 3    # Multiple of ATR to use for stoploss and order sizing calculation
 riskpct   <- 0.02 # Amount of trade balance to risk per trade
 
@@ -59,7 +59,7 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
 # Function to use High and Low in Donchian Channel Calculation
 HLDonch <- function(data, n=10, lag = TRUE){
   dataHL <- cbind(data[,2],data[,3])
-  assign("test",dataHL,envir = .GlobalEnv)
+  #assign("test",dataHL,envir = .GlobalEnv)
   hiLoDonch <- DonchianChannel(dataHL,n=n,include.lag = lag)
   hiLoDonch
 }

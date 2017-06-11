@@ -13,7 +13,7 @@ currency('USD')     # set USD as a base currency
 
 symbol <- c("LSU","RR","CO","NG","OJ","LB","HG",
             "LC","CT","KC","CC","WTI", "XAU")           # Default Universe selection
-risk <- setRisk(symbol)                                 # set the risk for rebalancing using the function
+#risk <- setRisk(symbol)                                 # set the risk for rebalancing using the function
 
 for (sym in symbol){
   future(sym, currency = "USD", multiplier = 1)

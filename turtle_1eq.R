@@ -16,8 +16,8 @@ account.st   <- "accnt"                # Account name
 initEq       <- 10000                 # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-breakout  <- 200
-stop  <- 180
+breakout  <- 20
+stop  <- 10
 atrMult <- 3
 riskpct <- 0.02
 
@@ -62,7 +62,7 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
 # Function to use High and Low in Donchian Channel Calculation
 HLDonch <- function(data, n=10, lag = TRUE){
   dataHL <- cbind(data[,2],data[,3])
-  assign("test",dataHL,envir = .GlobalEnv)
+  #assign("test",dataHL,envir = .GlobalEnv)
   hiLoDonch <- DonchianChannel(dataHL,n=n,include.lag = lag)
   hiLoDonch
 }
@@ -74,6 +74,9 @@ symbol <- "GSPC"            # Universe selection At this stage is only one symbo
 # set the instument as a future and get the data from yahoo
 stock(symbol, currency = "USD", multiplier = 1)
 getSymbols("^GSPC", from = '1995-01-01')
+for(sym in symbol){
+  assign(sym,na.fill(get(sym),fill='extend'))
+}
 
 # if run previously, run this code from here down to the strategy definition before re-running
 rm.strat(portfolio.st, silent = FALSE)
@@ -198,6 +201,19 @@ updateAcct(name = account.st)
 updateEndEq(account.st)
 
 #chart the position
+
+for (sym in symbol){
+  chart.Posn(Portfolio = portfolio.st, 
+             Symbol = symbol, 
+             TA=c("add_TA(mktdata$high.DonchBreak,on=1,col='red')",
+                  "add_TA(mktdata$low.DonchBreak,on=1,col='red')",
+                  "add_TA(mktdata$low.DonchStop,on=1,col='black')",
+                  "add_TA(mktdata$high.DonchStop,on=1,col='black')")
+  ) 
+  
+  # Chart the position 
+}
+
 donchian_break <- DonchianChannel(HL=(cbind(Hi(GSPC),Lo(GSPC))),n=breakout,include.lag = TRUE)
 donchian_stop <- DonchianChannel(HL=(cbind(Hi(GSPC),Lo(GSPC))),n=stop,include.lag = TRUE)
 chart.Posn(Portfolio = portfolio.st, Symbol = symbol, 
