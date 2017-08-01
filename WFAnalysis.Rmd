@@ -1,0 +1,298 @@
+---
+title: "WFA_Analysis USDCHF - Turtle System "
+author: "RJ Kumar"
+date: "03/06/2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Walk Forward Report
+
+This markdown document will generate a walk forward analysis report for a symbol, it will test optimization via net trading PL and the ratio of profit to maximum draw down.
+
+```{r strategy setup, message=FALSE, warning=FALSE, include=FALSE}
+# Load Quantstrat and required packages
+require(quantstrat)
+require(doMC)
+
+# Set the system time to UTC
+Sys.setenv(TZ="UTC")
+
+# Get DMA include ile with parameters and Functions
+source(paste(getwd(),"/TurtleInclude.R",sep=""))
+
+# Strategy specific variables
+riskpct <- 0.02 # percentage of equity to risk 
+risk    <- 1
+
+# Paramset Variables
+breakoutPset  <- seq(20, 120, by = 10)
+stopPset      <- seq(20, 120, by = 10)
+atrMultPset   <- seq(3, 10, by = 1)
+
+# StartDate, Training and Testing Lengths in Years
+startDate <- "2000" # You must edit the getCurrData file to match this
+trainingLength <- 5
+testingLength <- 1
+
+ # Get all symbols, uncomment what you need
+ # source(paste(getwd(),"/GetCommData.R",sep=""))
+  source(paste(getwd(),"/GetCurrData.R",sep=""))
+ # source(paste(getwd(),"/GetEqData.R",sep=""))
+
+ # Change symbol variable here if needed
+ symbol <- "USDCHF"
+
+ # Change the end dates if you need to so WFA runs without error
+ endDate <- "2016"
+ assign(symbol,get(symbol)[paste('/',endDate,sep = "")])
+ 
+ # Register the cores for parralel procssing
+ registerDoMC(cores=detectCores())
+```
+
+## Floating Analysis Window
+### Max Trading PL Testing Summary Chart
+
+```{r PL floating window, echo=FALSE, message=FALSE, warning=FALSE}
+# Initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
+
+rm.strat(portfolio.st, silent = FALSE)
+rm.strat(account.st, silent = FALSE)
+
+initPortf(portfolio.st, symbols = symbol)
+initAcct(account.st, portfolios = portfolio.st, initEq = initEq)
+initOrders(portfolio = portfolio.st)
+
+# Define the strategy with a position limit to prevent multiple trades in a direction
+for (sym in symbol){
+  addPosLimit(portfolio = portfolio.st, sym, timestamp="2000-01-01", maxpos=100, 
+              longlevels = 1, minpos=-100, shortlevels = 1)
+}
+
+load.strategy("Turtle")
+
+enable.rule(strat,type = "chain",label = "StopLONG")
+enable.rule(strat,type = "chain",label = "StopSHORT")
+
+# Register the cores for parralel processing
+registerDoMC(cores=detectCores())
+
+# Now apply the walk forward analysis over the parameter sets for optimization
+results <- walk.forward(strategy.st = strat, paramset.label = 'Turtle_OPT', 
+                        portfolio.st = portfolio.st,
+                        account.st = account.st, period = 'years',
+                        k.training = trainingLength,
+                        k.testing = testingLength, nsamples = 0, 
+                        obj.args = list(x = quote(tradeStats.list$Net.Trading.PL)),
+                        audit.prefix = 'wfa', anchored=FALSE, verbose=FALSE
+                        )
+
+# Update the portfolio
+updatePortf(Portfolio = portfolio.st)                                     
+updateAcct(name = account.st)
+updateEndEq(account.st)
+
+#chart the position
+chart.Posn(Portfolio = portfolio.st, Symbol = symbol)          # Chart the position
+
+
+```
+
+### Analysis Charts: Max Trading PL
+
+```{r PL float graphs, echo=FALSE, message=FALSE, warning=FALSE}
+# Code to chart the training periods and combined testing portfolio
+n <- 1 # Set a counter
+
+# Loop to print training perods, file names calculated from inputs 
+while(n <= as.numeric(endDate)-(as.numeric(startDate)+trainingLength-1)){
+  chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.",symbol,".",as.numeric(startDate)+(n-1), "*", (as.numeric(startDate) + trainingLength) + (n - 2), "*.RData", sep = ""))))
+  n <- n + testingLength
+}
+
+# Chart Testing Data
+chartFor("wfa.results.RData")
+```
+
+### Maximum Ratio of Profit to Maximum Drawdown Testing Summary Chart
+
+```{r profit to draw floating, echo=FALSE, message=FALSE, warning=FALSE}
+# If run previously, run this code from here down
+rm.strat(portfolio.st, silent = FALSE)
+rm.strat(account.st, silent = FALSE)
+
+# Initialize the portfolio, account and orders. Starting equity.
+initPortf(portfolio.st, symbols = symbol)
+initAcct(account.st, portfolios = portfolio.st, initEq = initEq)
+initOrders(portfolio = portfolio.st)
+
+# Define the strategy with a position limit to prevent multiple trades in a direction
+for (sym in symbol){
+  addPosLimit(portfolio = portfolio.st, sym, timestamp="2000-01-01", maxpos=100, 
+              longlevels = 1, minpos=-100, shortlevels = 1)
+}
+
+load.strategy("Turtle")
+
+enable.rule(strat,type = "chain",label = "StopLONG")
+enable.rule(strat,type = "chain",label = "StopSHORT")
+
+# Register the cores for parralel procssing
+registerDoMC(cores=detectCores())
+
+# Now apply the walk forward analysis over the parameter sets for optimization
+results <- walk.forward(strategy.st=strat, paramset.label='Turtle_OPT', portfolio.st=portfolio.st,
+                        account.st=account.st, period='years', k.training=trainingLength, k.testing=testingLength,
+                        nsamples=0, obj.args = list(x = quote(tradeStats.list$Profit.To.Max.Draw)),
+                        audit.prefix='wfa.p2d', anchored=FALSE, verbose=FALSE
+                        )
+
+# Update the portfolio
+updatePortf(Portfolio = portfolio.st)                                     
+updateAcct(name = account.st)
+updateEndEq(account.st)
+
+#chart the position
+chart.Posn(Portfolio = portfolio.st, Symbol = symbol)          # Chart the position
+```
+
+### Analysis Charts: Maximum Ratio of Profit to Maximum Drawdown
+
+```{r profit to draw floating graphs, echo=FALSE, message=FALSE, warning=FALSE}
+# Code to chart the training periods and combined testing portfolio
+n <- 1 # Set a counter
+
+# Loop to print training perods, file names calculated from inputs 
+while(n <= as.numeric(endDate)-(as.numeric(startDate)+trainingLength-1)){
+  chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2d.",symbol,".",as.numeric(startDate)+(n-1), "*", (as.numeric(startDate) + trainingLength) + (n - 2), "*.RData", sep = ""))))
+  n <- n + testingLength
+}
+
+# Chart Testing Data
+chartFor("wfa.p2d.results.RData")
+```
+
+## Anchored Analysis Window
+### Max Trading PL Testing Summary Chart
+
+```{r PL anchored, echo=FALSE, message=FALSE, warning=FALSE}
+# Initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
+
+rm.strat(portfolio.st, silent = FALSE)
+rm.strat(account.st, silent = FALSE)
+
+initPortf(portfolio.st, symbols = symbol)
+initAcct(account.st, portfolios = portfolio.st, initEq = initEq)
+initOrders(portfolio = portfolio.st)
+
+# Define the strategy with a position limit to prevent multiple trades in a direction
+for (sym in symbol){
+  addPosLimit(portfolio = portfolio.st, sym, timestamp="2000-01-01", maxpos=100, 
+              longlevels = 1, minpos=-100, shortlevels = 1)
+}
+
+load.strategy("Turtle")
+
+enable.rule(strat,type = "chain",label = "StopLONG")
+enable.rule(strat,type = "chain",label = "StopSHORT")
+
+# Register the cores for parralel processing
+registerDoMC(cores=detectCores())
+
+# Now apply the walk forward analysis over the parameter sets for optimization
+results <- walk.forward(strategy.st=strat, paramset.label='Turtle_OPT', 
+                        portfolio.st=portfolio.st,
+                        account.st=account.st, period='years', k.training=trainingLength,
+                        k.testing=testingLength, nsamples=0, 
+                        obj.args = list(x = quote(tradeStats.list$Net.Trading.PL)),
+                        audit.prefix='wfa.anc', anchored=TRUE, verbose=FALSE
+                        )
+
+# Update the portfolio
+updatePortf(Portfolio = portfolio.st)                                     
+updateAcct(name = account.st)
+updateEndEq(account.st)
+
+#chart the position
+chart.Posn(Portfolio = portfolio.st, Symbol = symbol)          # Chart the position
+```
+
+### Analysis Charts: Max Trading PL
+
+```{r PL anchored graphs, echo=FALSE, message=FALSE, warning=FALSE}
+# Code to chart the training periods and combined testing portfolio
+n <- 1 # Set a counter
+
+# Loop to print training perods, file names calculated from inputs 
+while(n <= as.numeric(endDate)-(as.numeric(startDate)+trainingLength-1)){
+  chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.anc.",symbol,".",as.numeric(startDate), "*", (as.numeric(startDate) + trainingLength) + (n - 2), "*.RData", sep = ""))))
+  n <- n + testingLength
+}
+
+# Chart Testing Data
+chartFor("wfa.anc.results.RData")
+```
+
+### Maximum Ratio of Profit to Maximum Drawdown Testing Summary Chart
+
+```{r profit to draw anchored, echo=FALSE, message=FALSE, warning=FALSE}
+# If run previously, run this code from here down
+rm.strat(portfolio.st, silent = FALSE)
+rm.strat(account.st, silent = FALSE)
+
+# Initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
+initPortf(portfolio.st, symbols = symbol)
+initAcct(account.st, portfolios = portfolio.st, initEq = initEq)
+initOrders(portfolio = portfolio.st)
+
+# Define the strategy with a position limit to prevent multiple trades in a direction
+for (sym in symbol){
+  addPosLimit(portfolio = portfolio.st, sym, timestamp="2000-01-01", maxpos=100, 
+              longlevels = 1, minpos=-100, shortlevels = 1)
+}
+
+load.strategy("Turtle")
+
+enable.rule(strat,type = "chain",label = "StopLONG")
+enable.rule(strat,type = "chain",label = "StopSHORT")
+
+# Register the cores for parralel procssing
+registerDoMC(cores=detectCores())
+
+# Now apply the walk forward analysis over the parameter sets for optimization
+results <- walk.forward(strategy.st=strat, paramset.label='Turtle_OPT', portfolio.st=portfolio.st,
+                        account.st=account.st, period='years', k.training=trainingLength, k.testing=testingLength,
+                        nsamples=0, obj.args = list(x = quote(tradeStats.list$Profit.To.Max.Draw)),
+                        audit.prefix='wfa.p2danc', anchored=TRUE, verbose=FALSE
+                        )
+
+# Update the portfolio
+updatePortf(Portfolio = portfolio.st)                                     
+updateAcct(name = account.st)
+updateEndEq(account.st)
+
+#chart the position
+chart.Posn(Portfolio = portfolio.st, Symbol = symbol)          # Chart the position
+```
+
+### Analysis Charts: Maximum Ratio of Profit to Maximum Drawdown
+
+```{r profit to draw anchored graphs, echo=FALSE, message=FALSE, warning=FALSE}
+# Code to chart the training periods and combined testing portfolio
+n <- 1 # Set a counter
+
+# Loop to print training perods, file names calculated from inputs 
+while(n <= as.numeric(endDate)-(as.numeric(startDate)+trainingLength-1)){
+  chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2danc.",symbol,".",as.numeric(startDate), "*", (as.numeric(startDate) + trainingLength) + (n - 2), "*.RData", sep = ""))))
+  n <- n + testingLength
+}
+
+# Chart Testing Data
+chartFor("wfa.p2danc.results.RData")
+```

@@ -14,8 +14,8 @@ test multiple parameters for multiple symbols. It will load the data that was pr
 stats. In this case it is the data for a donchian channel trend following strategy. The variables are breakout donchian channel, stop donchian channel and atr stoploss, which varies both stoploss distance from entry and trade size.
 
 ```{r}
-date <- "2017-04-07"
-stats <- read.csv(paste("/media/sjaoraid/strat/Turtle/opt/DonchianOpt",date,".csv", sep=""))
+date <- "2017-06-13"
+stats <- read.csv(paste("/media/sjaoraid/strat/DMA/opt/TurtleCurrOpt",date,".csv", sep=""))
 stats <- stats[,-1]
 symbols <- as.character(unique(stats$Symbol))
 library(ggplot2)
@@ -24,10 +24,10 @@ library(ggplot2)
 The first task is to identify the distribution of returns of the strategy over the paramter range tested.
 
 ```{r}
-hist(stats$Net.Trading.PL, breaks =200,xlim = c(-100000,100000), main = paste("Average = ", mean(stats$Net.Trading.PL)))
+hist(stats$Net.Trading.PL, breaks =100,xlim = c(-500000,500000), main = paste("Average = ", mean(stats$Net.Trading.PL)))
 ```
 
-This first level of analysis would seem to suggest that the strategy is not profitable overall, that is, is you traded every parameter combination that was tested with equal weighting you would come out marginally behind (6% loss over 10 years). The task now must be to eliminate parameter combinations in a non random fashion to produce data that will a) increase our confidence in the data we have obtained and b) increase average returns. Eventually, we may optimize each instrument, but only if we are clear about why we are doing this. So first let us have a look at some averages of the portfolios.
+This first level of analysis would seem to suggest that the strategy is not profitable overall, that is, is you traded every parameter combination that was tested with equal weighting you would come out neutral without transaction fees accounted for (6% loss over 10 years). The task now must be to eliminate parameter combinations in a non random fashion to produce data that will a) increase our confidence in the data we have obtained and b) increase average returns. Eventually, we may optimize each instrument, but only if we are clear about why we are doing this. So first let us have a look at some averages of the portfolios.
 
 ```{r}
 portfolio_avg <- aggregate(stats[,c(1,2,3,6:33)],list(stats$Portfolio), mean)
@@ -47,22 +47,22 @@ qplot(data = portfolio_avg,x=atr,y=Ann.Sharpe,facets = .~DonchBreak,color=DonchS
 Performance is really not good here. One observation is that a close stop loss tends to ruin (even more) the performance of your strategy. We can get rid of all trades with ATR set to 1.
 
 ```{r}
-hist(subset(stats,atr>1)$Net.Trading.PL,breaks =50,xlim = c(-100000,100000), main = paste("Average = ", mean(subset(stats,atr>1)$Net.Trading.PL)))
+hist(stats[stats$atr>2 & stats$DonchBreak < 140,]$Net.Trading.PL,breaks =50,xlim = c(-1000000,1000000), main = paste("Average = ", mean(stats[stats$atr>2 & stats$DonchBreak < 140,]$Net.Trading.PL)))
 ```
 Sucks a little bit less.
 
 ```{r}
-qplot(data = subset(portfolio_avg,ma_slow<110),x=atr,y=Num.Trades,facets = .~ma_slow,color=ma_fast)
-qplot(data = subset(portfolio_avg,ma_slow<110),x=atr,y=Net.Trading.PL,facets = .~ma_slow,color=ma_fast)
-qplot(data = subset(portfolio_avg,ma_slow<110),x=atr,y=Profit.To.Max.Draw,facets = .~ma_slow,color=ma_fast)
-qplot(data = subset(portfolio_avg,ma_slow<110),x=atr,y=Ann.Sharpe,facets = .~ma_slow,color=ma_fast,ylim = c(-10,6))
+qplot(data = stats[stats$atr>2,],x=atr,y=Num.Trades,facets = .~DonchBreak,color=DonchStop)
+qplot(data = stats[stats$atr>2,],x=atr,y=Net.Trading.PL,facets = .~DonchBreak,color=DonchStop)
+qplot(data = stats[stats$atr>2,],x=atr,y=Profit.To.Max.Draw,facets = .~DonchBreak,color=DonchStop)
+qplot(data = stats[stats$atr>2,],x=atr,y=Ann.Sharpe,facets = .~DonchBreak,color=DonchStop)
 ```
 
 Perhaps an examination of each of the symbols that are captured by these averages will help shed light on the nature of the relationship between moving average period and atr on the above parameters.
 
 ```{r, message=FALSE, warning=FALSE}
 for(sym in symbols){
-  print(qplot(data = stats[stats$Symbol==sym,],x=atr,y=Num.Trades,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of No. of Trades with Donch Channel Length & ATR for ",sym,sep="")))
+  print(qplot(data = stats[stats$Symbol==sym&stats$atr>2,],x=atr,y=Num.Trades,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of No. of Trades with Donch Channel Length & ATR for ",sym,sep="")))
   
 }
 ```
@@ -70,7 +70,7 @@ for(sym in symbols){
 ```{r, message=FALSE, warning=FALSE}
 for(sym in symbols){
   
-  print(qplot(data = stats[stats$Symbol==sym,],x=atr,y=Net.Trading.PL,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of Net PL with Donch & ATR for ",sym,sep="")))
+  print(qplot(data = stats[stats$Symbol==sym&stats$atr>2,],x=atr,y=Net.Trading.PL,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of Net PL with Donch & ATR for ",sym,sep="")))
   
 }
 ```
@@ -78,7 +78,7 @@ for(sym in symbols){
 ```{r, message=FALSE, warning=FALSE}
 for(sym in symbols){
   
-  print(qplot(data = stats[stats$Symbol==sym,],x=atr,y=Profit.To.Max.Draw,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of Profit:Maximum Drawdown with Donch & ATR for ",sym,sep="")))
+  print(qplot(data = stats[stats$Symbol==sym&stats$atr>2,],x=atr,y=Profit.To.Max.Draw,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of Profit:Maximum Drawdown with Donch & ATR for ",sym,sep="")))
   
 }
 ```
@@ -86,7 +86,7 @@ for(sym in symbols){
 ```{r, message=FALSE, warning=FALSE}
 for(sym in symbols){
   
-  print(qplot(data = stats[stats$Symbol==sym,],x=atr,y=Ann.Sharpe,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of Sharpe Ratio with Donch & ATR for ",sym,sep=""),ylim = c(-10,10)))
+  print(qplot(data = stats[stats$Symbol==sym&stats$atr>2,],x=atr,y=Ann.Sharpe,facets = .~DonchBreak,color=DonchStop,main=paste("Variation of Sharpe Ratio with Donch & ATR for ",sym,sep=""),ylim = c(-10,10)))
 }
 ```
 

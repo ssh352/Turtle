@@ -78,6 +78,8 @@ add.distribution.constraint(strategy = strat,
                             operator = ">",
                             label = "breakgtstop")
 
+save.strategy("Turtle")
+
 enable.rule(strat,type = "chain",label = "StopLONG")
 enable.rule(strat,type = "chain",label = "StopSHORT")
 
@@ -92,5 +94,5 @@ stats <- out$tradeStats
 
 # Write to csv file for later analysis
 out <- write.csv(stats,             
-                 file = paste("/media/sjaoraid/strat/DMA/opt/DMACurrOpt",as.character(Sys.Date()),".csv", sep=""),
+                 file = paste("/media/sjaoraid/strat/DMA/opt/TurtleCurrOpt",as.character(Sys.Date()),".csv", sep=""),
                  quote = FALSE, row.names = TRUE)
